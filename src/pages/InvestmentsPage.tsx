@@ -36,24 +36,34 @@ export default function InvestmentsPage() {
   }, []);
 
   const fetchAll = async () => {
-    const data = await getInvestments();
-    setInvestments(data);
+    try {
+      const data = await getInvestments();
+      setInvestments(data);
+    } catch (err) {
+      console.error("Error fetching investments:", err);
+    }
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    await createInvestment({
-      ...form,
-      amount: Number(form.amount),
-    });
-
-    fetchAll();
+    try {
+      await createInvestment({
+        ...form,
+        amount: Number(form.amount),
+      });
+      fetchAll();
+    } catch (err) {
+      console.error("Error creating investment:", err);
+    }
   };
 
   const handleDelete = async (id: number) => {
-    await deleteInvestment(id);
-    fetchAll();
+    try {
+      await deleteInvestment(id);
+      fetchAll();
+    } catch (err) {
+      console.error("Error deleting investment:", err);
+    }
   };
 
   const handleChange = (
@@ -75,7 +85,6 @@ export default function InvestmentsPage() {
           value={form.user_id}
           onChange={handleChange}
         />
-
         <input
           type="text"
           name="title"
@@ -83,7 +92,6 @@ export default function InvestmentsPage() {
           value={form.title}
           onChange={handleChange}
         />
-
         <input
           type="number"
           name="amount"
@@ -91,7 +99,6 @@ export default function InvestmentsPage() {
           value={form.amount}
           onChange={handleChange}
         />
-
         <button type="submit">Create Investment</button>
       </form>
 
