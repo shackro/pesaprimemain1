@@ -1,6 +1,4 @@
-// src/services/api.ts
 import axios from "axios";
-import apiService from "src/services/api.ts";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -116,19 +114,6 @@ export interface Investment {
   amount: number;
   category?: string;
 }
-
-
-useEffect(() => {
-  const fetchData = async () => {
-    try {
-      const investments = await apiService.getInvestments();
-      setInvestments(investments);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-  fetchData();
-}, []);
 
 // ===============================
 // API SERVICE CLASS
@@ -252,27 +237,11 @@ class ApiService {
     return this.request<UserInvestment[]>("/api/investments/my");
   }
 
-  async buyInvestment(data: InvestmentRequest): Promise<{
-    success: boolean;
-    message: string;
-    investment: UserInvestment;
-    new_balance: number;
-  }> {
-    return this.request("/api/investments/buy", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-
   async createInvestment(data: Investment): Promise<Investment> {
     return this.request("/api/investments/", {
       method: "POST",
       body: JSON.stringify(data),
     });
-  }
-
-  async getInvestments(): Promise<Investment[]> {
-    return this.request<Investment[]>("/api/investments/");
   }
 
   async getInvestment(id: number): Promise<Investment> {
@@ -293,7 +262,7 @@ class ApiService {
   }
 
   // ===============================
-  // ACTIVITIES
+  // ACTIVITIES METHODS
   // ===============================
   async getMyActivities(): Promise<UserActivity[]> {
     return this.request<UserActivity[]>("/api/activities/my");
@@ -336,62 +305,17 @@ class ApiService {
 }
 
 // ===============================
-// LEGACY AXIOS FUNCTIONS
+// SINGLETON INSTANCE
 // ===============================
-const LEGACY_API_URL = "https://pesaprime-end-v3.onrender.com";
+export const apiService = new ApiService();
+export default apiService;
 
-export const createInvestmentLegacy = async (data: Investment) => {
-  try {
-    const res = await axios.post(`${LEGACY_API_URL}/investments/`, data);
-    return res.data;
-  } catch (error) {
-    console.error("Error creating investment:", error);
-    throw error;
-  }
-};
-
-export const getInvestmentsLegacy = async (): Promise<Investment[]> => {
-  try {
-    const res = await axios.get(`${LEGACY_API_URL}/investments/`);
-    return res.data;
-  } catch (error) {
-    console.error("Error getting investments:", error);
-    throw error;
-  }
-};
-
-export const getInvestmentLegacy = async (id: number): Promise<Investment> => {
-  try {
-    const res = await axios.get(`${LEGACY_API_URL}/investments/${id}`);
-    return res.data;
-  } catch (error) {
-    console.error("Error getting investment:", error);
-    throw error;
-  }
-};
-
-export const updateInvestmentLegacy = async (
-  id: number,
-  data: Partial<Investment>
-): Promise<Investment> => {
-  try {
-    const res = await axios.put(`${LEGACY_API_URL}/investments/${id}`, data);
-    return res.data;
-  } catch (error) {
-    console.error("Error updating investment:", error);
-    throw error;
-  }
-};
-
-export const deleteInvestmentLegacy = async (id: number): Promise<{ message: string }> => {
-  try {
-    const res = await axios.delete(`${LEGACY_API_URL}/investments/${id}`);
-    return res.data;
-  } catch (error) {
-    console.error("Error deleting investment:", error);
-    throw error;
-  }
-};
+// ===============================
+// NAMED WRAPPERS FOR PAGES
+// ===============================
+export const getInvestments = () => apiService.getMyInvestments();
+export const createInvestment = (data: Investment) => apiService.createInvestment(data);
+export const deleteInvestment = (id: number) => apiService.deleteInvestment(id);
 
 // ===============================
 // ERROR HANDLER
@@ -410,9 +334,3 @@ export class ApiErrorHandler {
     return "An unexpected error occurred.";
   }
 }
-
-// ===============================
-// EXPORT SINGLETON
-// ===============================
-export const apiService = new ApiService();
-export default apiService;
