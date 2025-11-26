@@ -3,7 +3,7 @@ import {
   getInvestments,
   createInvestment,
   deleteInvestment,
-} from "../services/investmentsService";
+} from "../services/api";
 
 // Types for an investment item returned from API
 interface Investment {

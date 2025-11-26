@@ -5,15 +5,12 @@ import axios from "axios";
 // ===============================
 // TYPES
 // ===============================
-
-// Core User Types
 export interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
   phone_number: string;
   created_at: string;
-  updated_at?: string;
 }
 
 export interface UserLogin {
@@ -26,46 +23,18 @@ export interface UserCreate {
   email: string;
   phone_number: string;
   password: string;
-  password_confirm?: string;
 }
 
-export interface UserUpdate {
-  name?: string;
-  phone_number?: string;
-}
-
-export interface UserResponse {
-  id: number;
-  name: string;
-  email: string;
-  phone_number: string;
-  created_at: string;
-}
-
-// Auth Types
 export interface AuthResponse {
-  success: boolean;
-  message: string;
   access_token: string;
   token_type: string;
-  user: UserResponse;
-  refresh_token?: string;
+  user: User;
 }
 
-export interface TokenRefreshResponse {
-  access: string;
-  refresh: string;
-}
-
-// Wallet Types
 export interface WalletData {
-  id: number;
-  user_id: number;
   balance: number;
   equity: number;
   currency: string;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface DepositRequest {
@@ -82,26 +51,27 @@ export interface TransactionResponse {
   success: boolean;
   message: string;
   new_balance: number;
-  new_equity: number;
-  transaction_id?: string;
+  transaction_id: string;
 }
 
-// Transaction Types
-export interface Transaction {
-  id: number;
-  user: number;
-  type: 'deposit' | 'withdrawal' | 'investment' | 'bonus';
-  amount: number;
-  description: string;
-  status: 'completed' | 'pending' | 'failed';
-  currency: string;
-  timestamp: string;
+export interface Asset {
+  id: string;
+  name: string;
+  symbol: string;
+  type: string;
+  current_price: number;
+  change_percentage: number;
+  moving_average: number;
+  trend: string;
+  chart_url: string;
+  hourly_income: number;
+  min_investment: number;
+  duration: number;
 }
 
-// Investment Types
 export interface UserInvestment {
-  id?: number;
-  user?: number;
+  id: string;
+  user_phone: string;
   asset_id: string;
   asset_name: string;
   invested_amount: number;
@@ -109,25 +79,26 @@ export interface UserInvestment {
   units: number;
   entry_price: number;
   current_price: number;
-  hourly_income?: number;
-  total_income?: number;
-  duration?: number;
-  roi_percentage?: number;
   profit_loss: number;
   profit_loss_percentage: number;
-  status: 'active' | 'closed';
-  created_at?: string;
-  completion_time?: string;
+  status: string;
+  created_at: string;
 }
 
 export interface UserActivity {
-  id?: number;
-  user_phone?: string;
-  activity_type: 'registration' | 'deposit' | 'withdraw' | 'investment';
+  id: string;
+  user_phone: string;
+  activity_type: string;
   amount: number;
   description: string;
   timestamp: string;
-  status: 'completed' | 'pending' | 'failed';
+  status: string;
+}
+
+export interface PnLData {
+  profit_loss: number;
+  percentage: number;
+  trend: string;
 }
 
 export interface InvestmentRequest {
@@ -136,67 +107,33 @@ export interface InvestmentRequest {
   phone_number: string;
 }
 
-export interface Asset {
-  id: string;
-  name: string;
-  symbol: string;
-  type: 'crypto' | 'forex' | 'commodity' | 'stock';
-  current_price: number;
-  change_percentage: number;
-  moving_average: number;
-  trend: 'up' | 'down';
-  chart_url: string;
-  hourly_income: number;
-  min_investment: number;
-  duration: number;
-  total_income: number;
-  roi_percentage: number;
-}
+const API_URL =
+  import.meta.env.MODE === "development"
+    ? "http://127.0.0.1:8002/investments"
+    : "https://pesaprime-end-v3.onrender.com";
 
-// Error Types
-export interface ApiError {
-  message: string;
-  detail?: string;
-  code?: string;
-  errors?: Record<string, string[]>;
+// ------------ TYPES ------------
+export interface Investment {
+  id?: number;
+  user_id: string;
+  title: string;
+  amount: number;
+  category?: string;
 }
-
-export interface ValidationError {
-  [field: string]: string[] | string;
-}
-
-// Response Wrappers
-export interface PaginatedResponse<T> {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: T[];
-}
-
-export interface BaseResponse<T = any> {
-  success: boolean;
-  message: string;
-  data?: T;
-  errors?: ValidationError;
-}
-
 // ===============================
 // API SERVICE
 // ===============================
-
 class ApiService {
+  getPnL: any;
+  getMarketAssets(): Asset[] | PromiseLike<Asset[]> {
+    throw new Error('Method not implemented.');
+  }
   private baseURL: string;
-  private retryCount: number = 0;
-  private maxRetries: number = 5;
 
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_BASE_URL || 'https://pesaprime-end.onrender.com';
-    console.log('API Base URL:', this.baseURL);
+    this.baseURL = import.meta.env.VITE_API_URL || 'http://https://pesaprime-end-v3.onrender.com';
   }
 
-  // ===============================
-  // TOKEN & HEADERS
-  // ===============================
   private getToken(): string | null {
     return localStorage.getItem('authToken');
   }
@@ -207,78 +144,73 @@ class ApiService {
 
   private removeToken(): void {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
   }
 
-  private getAuthHeaders(): HeadersInit {
+  private async request<T>(
+    endpoint: string, 
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
     const token = this.getToken();
-    return {
+    
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...options.headers,
     };
-  }
 
-  // ===============================
-  // FETCH REQUEST HANDLER
-  // ===============================
-  private async handleResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) {
-      const text = await response.text();
-      let errorMsg = text;
-      try { 
-        const parsed = JSON.parse(text);
-        errorMsg = parsed.detail || parsed.message || JSON.stringify(parsed);
-      } catch {}
-      throw new Error(errorMsg || response.statusText);
-    }
-    if (response.status === 204) return {} as T;
-    return (await response.json()) as T;
-  }
-
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${this.baseURL}${endpoint}`;
     try {
       const response = await fetch(url, {
-        headers: this.getAuthHeaders(),
         ...options,
+        headers,
       });
-      return await this.handleResponse<T>(response);
-    } catch (error: any) {
-      if (this.retryCount < this.maxRetries && (!error.status || error.message.includes('Network'))) {
-        this.retryCount++;
-        await new Promise(r => setTimeout(r, 500 * this.retryCount));
-        return this.request<T>(endpoint, options);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
       }
-      this.retryCount = 0;
+
+      // Handle empty responses
+      if (response.status === 204) {
+        return {} as T;
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`API Request failed: ${endpoint}`, error);
       throw error;
     }
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  private isNetworkError(error: any): boolean {
-    return error instanceof TypeError || error.message?.includes('Network') || error.message?.includes('fetch');
   }
 
   // ===============================
   // AUTH METHODS
   // ===============================
   async register(userData: UserCreate): Promise<AuthResponse> {
-    const data = await this.request<AuthResponse>('/api/auth/register/', {
+    const data = await this.request<AuthResponse>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
-    if (data.access_token) this.setToken(data.access_token);
+    
+    if (data.access_token) {
+      this.setToken(data.access_token);
+      localStorage.setItem('userData', JSON.stringify(data.user));
+    }
+    
     return data;
   }
 
   async login(loginData: UserLogin): Promise<AuthResponse> {
-    const data = await this.request<AuthResponse>('/api/auth/login/', {
+    const data = await this.request<AuthResponse>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify(loginData),
     });
-    if (data.access_token) this.setToken(data.access_token);
+    
+    if (data.access_token) {
+      this.setToken(data.access_token);
+      localStorage.setItem('userData', JSON.stringify(data.user));
+    }
+    
     return data;
   }
 
@@ -286,176 +218,116 @@ class ApiService {
     this.removeToken();
   }
 
-  async getCurrentUser(): Promise<UserResponse> {
-    return this.request<UserResponse>('/api/auth/user/');
-  }
-
-  async updateProfile(profileData: UserUpdate): Promise<BaseResponse<UserResponse>> {
-    return this.request<BaseResponse<UserResponse>>('/api/auth/profile/update/', {
-      method: 'PUT',
-      body: JSON.stringify(profileData),
-    });
-  }
-
-  async changePassword(passwordData: { current_password: string; new_password: string; confirm_password?: string; }): Promise<BaseResponse> {
-    return this.request<BaseResponse>('/api/auth/password/change/', {
-      method: 'POST',
-      body: JSON.stringify(passwordData),
-    });
+  async getCurrentUser(): Promise<User> {
+    return this.request<User>('/api/auth/me');
   }
 
   // ===============================
   // WALLET METHODS
   // ===============================
   async getWalletBalance(): Promise<WalletData> {
-    return this.request<WalletData>('/api/wallet/balance/');
+    return this.request<WalletData>('/api/wallet/balance');
   }
 
-  async depositFunds(data: DepositRequest): Promise<TransactionResponse> {
-    return this.request<TransactionResponse>('/api/wallet/deposit/', {
+  async depositFunds(depositData: DepositRequest): Promise<TransactionResponse> {
+    return this.request<TransactionResponse>('/api/wallet/deposit', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(depositData),
     });
   }
 
-  async withdrawFunds(data: WithdrawRequest): Promise<TransactionResponse> {
-    return this.request<TransactionResponse>('/api/wallet/withdraw/', {
+  async withdrawFunds(withdrawData: WithdrawRequest): Promise<TransactionResponse> {
+    return this.request<TransactionResponse>('/api/wallet/withdraw', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(withdrawData),
     });
+  }
+
+  // ===============================
+  // ASSET METHODS
+  // ===============================
+  async getAssets(): Promise<Asset[]> {
+    return this.request<Asset[]>('/api/assets/market');
   }
 
   // ===============================
   // INVESTMENT METHODS
   // ===============================
-  // Fetch via Fetch API
-  async getAssets(): Promise<Asset[]> {
-    return this.request<Asset[]>('/api/investments/assets/');
-  }
-
   async getMyInvestments(): Promise<UserInvestment[]> {
-    return this.request<UserInvestment[]>('/api/investments/my-investments/');
+    return this.request<UserInvestment[]>('/api/investments/my');
   }
 
-  async buyInvestment(investmentData: InvestmentRequest): Promise<BaseResponse<{ investment: UserInvestment; new_balance: number }>> {
-    return this.request<BaseResponse<{ investment: UserInvestment; new_balance: number }>>('/api/investments/buy/', {
+  async buyInvestment(investmentData: InvestmentRequest): Promise<{
+    success: boolean;
+    message: string;
+    investment: UserInvestment;
+    new_balance: number;
+  }> {
+    return this.request('/api/investments/buy', {
       method: 'POST',
       body: JSON.stringify(investmentData),
     });
   }
 
-  // Additional CRUD via Axios for convenience
-  private axiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'https://pesaprime-end.onrender.com',
-    headers: { 'Content-Type': 'application/json' },
-  });
-
-  async createInvestment(data: { title: string; amount: number; category?: string; user_id: string }) {
-    const res = await this.axiosInstance.post('/investments/', data);
-    return res.data;
-  }
-
-  async getInvestments(): Promise<UserInvestment[]> {
-    const res = await this.axiosInstance.get('/investments/');
-    return res.data;
-  }
-
-  async getInvestment(id: number): Promise<UserInvestment> {
-    const res = await this.axiosInstance.get(`/investments/${id}`);
-    return res.data;
-  }
-
-  async updateInvestment(id: number, data: Partial<UserInvestment>): Promise<UserInvestment> {
-    const res = await this.axiosInstance.put(`/investments/${id}`, data);
-    return res.data;
-  }
-
-  async deleteInvestment(id: number): Promise<{ message: string }> {
-    const res = await this.axiosInstance.delete(`/investments/${id}`);
-    return res.data;
-  }
-
   // ===============================
   // ACTIVITY METHODS
   // ===============================
-  async getMyActivities(params?: { page?: number; activity_type?: string; limit?: number }): Promise<UserActivity[]> {
-    const query = new URLSearchParams();
-    if (params?.page) query.append('page', params.page.toString());
-    if (params?.activity_type) query.append('activity_type', params.activity_type);
-    if (params?.limit) query.append('limit', params.limit.toString());
-    const url = query.toString() ? `/api/activities/?${query}` : '/api/activities/';
-    return this.request<UserActivity[]>(url);
+  async getMyActivities(): Promise<UserActivity[]> {
+    return this.request<UserActivity[]>('/api/activities/my');
   }
 
   // ===============================
-  // FILE UPLOAD & WEBSOCKET
+  // PnL METHODS
   // ===============================
-  async uploadProfileImage(file: File): Promise<{ url: string; filename: string }> {
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await fetch(`${this.baseURL}/api/auth/upload-profile-image/`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${this.getToken()}` },
-      body: formData,
-    });
-    return this.handleResponse(res);
-  }
-
-  getWebSocketUrl(): string {
-    const token = this.getToken();
-    const wsBase = this.baseURL.replace('http', 'ws');
-    return token ? `${wsBase}/ws/investments/?token=${token}` : `${wsBase}/ws/investments/`;
+  async getCurrentPnL(): Promise<PnLData> {
+    return this.request<PnLData>('/api/pnl/current');
   }
 
   // ===============================
-  // SYSTEM & UTILITY
+  // UTILITY METHODS
   // ===============================
-  async healthCheck(): Promise<{ status: string; service: string; timestamp: string }> {
-    return this.request('/api/health/');
-  }
-
-  async getServerStatus(): Promise<{ status: string; database: boolean; cache: boolean; timestamp: string }> {
-    return this.request('/api/status/');
-  }
-
-  clearCache(): void {
-    localStorage.removeItem('cachedAssets');
-    localStorage.removeItem('cachedUserData');
+  async healthCheck(): Promise<{ status: string; timestamp: string }> {
+    return this.request('/health');
   }
 
   isAuthenticated(): boolean {
     return !!this.getToken();
   }
 
-  getAuthState(): { isAuthenticated: boolean; token: string | null } {
-    return { isAuthenticated: this.isAuthenticated(), token: this.getToken() };
+  getStoredUser(): User | null {
+    const userData = localStorage.getItem('userData');
+    return userData ? JSON.parse(userData) : null;
   }
 }
 
-// ===============================
-// ERROR HANDLER UTILITIES
-// ===============================
-export class ApiErrorHandler {
-  static handle(error: any, context: string = ''): string {
-    console.error(`API Error in ${context}:`, error);
-    if (error instanceof Error) {
-      if (error.message.includes('Network') || error.message.includes('fetch')) return 'Network error. Check your connection.';
-      if (error.message.includes('Authentication') || error.message.includes('401')) return 'Session expired. Login again.';
-      if (error.message.includes('500')) return 'Server error. Try again later.';
-      return error.message;
-    }
-    return 'An unexpected error occurred.';
-  }
+export const createInvestment = async (data: Investment) => {
+  const res = await axios.post(API_URL + "/", data);
+  return res.data;
+};
 
-  static extractValidationErrors(error: any): ValidationError {
-    if (error.errors && typeof error.errors === 'object') return error.errors;
-    return {};
-  }
-}
+export const getInvestments = async () => {
+  const res = await axios.get(API_URL + "/");
+  return res.data as Investment[];
+};
+
+export const getInvestment = async (id: number) => {
+  const res = await axios.get(`${API_URL}/${id}`);
+  return res.data as Investment;
+};
+
+export const updateInvestment = async (id: number, data: Partial<Investment>) => {
+  const res = await axios.put(`${API_URL}/${id}`, data);
+  return res.data;
+};
+
+export const deleteInvestment = async (id: number) => {
+  const res = await axios.delete(`${API_URL}/${id}`);
+  return res.data;
+};
+
 
 // ===============================
 // EXPORT SINGLETON
 // ===============================
 export const apiService = new ApiService();
-export const useApi = () => apiService;
 export default apiService;
