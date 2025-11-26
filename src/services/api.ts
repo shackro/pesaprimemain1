@@ -1,5 +1,4 @@
 // src/services/api.ts
-
 import axios from "axios";
 
 // ===============================
@@ -107,12 +106,6 @@ export interface InvestmentRequest {
   phone_number: string;
 }
 
-const API_URL =
-  import.meta.env.MODE === "development"
-    ? "http://127.0.0.1:8002/investments"
-    : "https://pesaprime-end-v3.onrender.com";
-
-// ------------ TYPES ------------
 export interface Investment {
   id?: number;
   user_id: string;
@@ -120,38 +113,51 @@ export interface Investment {
   amount: number;
   category?: string;
 }
+
 // ===============================
 // API SERVICE
 // ===============================
 class ApiService {
-  getPnL: any;
-  getMarketAssets(): Asset[] | PromiseLike<Asset[]> {
-    throw new Error('Method not implemented.');
-  }
   private baseURL: string;
 
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_URL || 'http://https://pesaprime-end-v3.onrender.com';
+    // Fixed the URL - removed the duplicate protocol
+    this.baseURL = import.meta.env.VITE_API_BASE_URL || 'https://pesaprime-end-v3.onrender.com';
+    console.log('🚀 API Service initialized with URL:', this.baseURL);
   }
 
   private getToken(): string | null {
-    return localStorage.getItem('authToken');
+    try {
+      return localStorage.getItem('authToken');
+    } catch (error) {
+      console.error('Error getting token:', error);
+      return null;
+    }
   }
 
   private setToken(token: string): void {
-    localStorage.setItem('authToken', token);
+    try {
+      localStorage.setItem('authToken', token);
+    } catch (error) {
+      console.error('Error setting token:', error);
+    }
   }
 
   private removeToken(): void {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
+    try {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+    } catch (error) {
+      console.error('Error removing token:', error);
+    }
   }
 
   private async request<T>(
     endpoint: string, 
     options: RequestInit = {}
   ): Promise<T> {
-    const url = `${this.baseURL}${endpoint}`;
+    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${this.baseURL}${path}`;
     const token = this.getToken();
     
     const headers: HeadersInit = {
@@ -161,6 +167,8 @@ class ApiService {
     };
 
     try {
+      console.log(`📡 Making API request to: ${url}`);
+      
       const response = await fetch(url, {
         ...options,
         headers,
@@ -168,7 +176,16 @@ class ApiService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || `HTTP ${response.status}`);
+        let errorMessage = `HTTP ${response.status}`;
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || errorData.message || errorText;
+        } catch {
+          errorMessage = errorText || `HTTP error! status: ${response.status}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       // Handle empty responses
@@ -178,7 +195,12 @@ class ApiService {
 
       return await response.json();
     } catch (error) {
-      console.error(`API Request failed: ${endpoint}`, error);
+      console.error(`❌ API Request failed for ${url}:`, error);
+      
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Network error: Cannot connect to server. Please check your internet connection.');
+      }
+      
       throw error;
     }
   }
@@ -246,7 +268,7 @@ class ApiService {
   // ===============================
   // ASSET METHODS
   // ===============================
-  async getAssets(): Promise<Asset[]> {
+  async getMarketAssets(): Promise<Asset[]> {
     return this.request<Asset[]>('/api/assets/market');
   }
 
@@ -287,6 +309,10 @@ class ApiService {
   // UTILITY METHODS
   // ===============================
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
+    return this.request('/api/health');
+  }
+
+  async serverHealth(): Promise<{ status: string; timestamp: string }> {
     return this.request('/health');
   }
 
@@ -295,36 +321,102 @@ class ApiService {
   }
 
   getStoredUser(): User | null {
-    const userData = localStorage.getItem('userData');
-    return userData ? JSON.parse(userData) : null;
+    try {
+      const userData = localStorage.getItem('userData');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Error getting stored user:', error);
+      return null;
+    }
+  }
+
+  getCurrentUserPhone(): string | null {
+    const user = this.getStoredUser();
+    return user ? user.phone_number : null;
   }
 }
 
+// ===============================
+// LEGACY INVESTMENT FUNCTIONS (axios-based)
+// ===============================
+const LEGACY_API_URL = "https://pesaprime-end-v3.onrender.com";
+
 export const createInvestment = async (data: Investment) => {
-  const res = await axios.post(API_URL + "/", data);
-  return res.data;
+  try {
+    const res = await axios.post(`${LEGACY_API_URL}/investments/`, data);
+    return res.data;
+  } catch (error) {
+    console.error('Error creating investment:', error);
+    throw error;
+  }
 };
 
-export const getInvestments = async () => {
-  const res = await axios.get(API_URL + "/");
-  return res.data as Investment[];
+export const getInvestments = async (): Promise<Investment[]> => {
+  try {
+    const res = await axios.get(`${LEGACY_API_URL}/investments/`);
+    return res.data;
+  } catch (error) {
+    console.error('Error getting investments:', error);
+    throw error;
+  }
 };
 
-export const getInvestment = async (id: number) => {
-  const res = await axios.get(`${API_URL}/${id}`);
-  return res.data as Investment;
+export const getInvestment = async (id: number): Promise<Investment> => {
+  try {
+    const res = await axios.get(`${LEGACY_API_URL}/investments/${id}`);
+    return res.data;
+  } catch (error) {
+    console.error('Error getting investment:', error);
+    throw error;
+  }
 };
 
-export const updateInvestment = async (id: number, data: Partial<Investment>) => {
-  const res = await axios.put(`${API_URL}/${id}`, data);
-  return res.data;
+export const updateInvestment = async (id: number, data: Partial<Investment>): Promise<Investment> => {
+  try {
+    const res = await axios.put(`${LEGACY_API_URL}/investments/${id}`, data);
+    return res.data;
+  } catch (error) {
+    console.error('Error updating investment:', error);
+    throw error;
+  }
 };
 
-export const deleteInvestment = async (id: number) => {
-  const res = await axios.delete(`${API_URL}/${id}`);
-  return res.data;
+export const deleteInvestment = async (id: number): Promise<{ message: string }> => {
+  try {
+    const res = await axios.delete(`${LEGACY_API_URL}/investments/${id}`);
+    return res.data;
+  } catch (error) {
+    console.error('Error deleting investment:', error);
+    throw error;
+  }
 };
 
+// ===============================
+// ERROR HANDLER
+// ===============================
+export class ApiErrorHandler {
+  static handle(error: any, context: string = ''): string {
+    console.error(`API Error in ${context}:`, error);
+    
+    if (error instanceof Error) {
+      if (error.message.includes('Network') || error.message.includes('Failed to fetch')) {
+        return 'Unable to connect to server. Please check your internet connection.';
+      }
+      if (error.message.includes('401') || error.message.includes('Authentication')) {
+        return 'Your session has expired. Please login again.';
+      }
+      if (error.message.includes('404')) {
+        return 'Requested resource not found.';
+      }
+      if (error.message.includes('500')) {
+        return 'Server error. Please try again later.';
+      }
+      return error.message;
+    }
+    
+    return 'An unexpected error occurred. Please try again.';
+  }
+}
 
 // ===============================
 // EXPORT SINGLETON
