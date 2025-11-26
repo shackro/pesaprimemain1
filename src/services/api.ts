@@ -1,9 +1,7 @@
 // src/services/api.ts
 import axios from "axios";
 
-// ===============================
-// TYPES
-// ===============================
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface User {
   id: string;
   name: string;
@@ -69,7 +67,7 @@ export interface Asset {
 }
 
 export interface UserInvestment {
-  id: string;
+  id: number;
   user_phone: string;
   asset_id: string;
   asset_name: string;
@@ -85,7 +83,7 @@ export interface UserInvestment {
 }
 
 export interface UserActivity {
-  id: string;
+  id: number;
   user_phone: string;
   activity_type: string;
   amount: number;
@@ -115,93 +113,61 @@ export interface Investment {
 }
 
 // ===============================
-// API SERVICE
+// API SERVICE CLASS
 // ===============================
 class ApiService {
   private baseURL: string;
 
   constructor() {
-    // Fixed the URL - removed the duplicate protocol
-    this.baseURL = import.meta.env.VITE_API_BASE_URL || 'https://pesaprime-end-v3.onrender.com';
-    console.log('🚀 API Service initialized with URL:', this.baseURL);
+    this.baseURL =
+      import.meta.env.VITE_API_BASE_URL || "https://pesaprime-end-v3.onrender.com";
+    console.log("🚀 API Service initialized with URL:", this.baseURL);
   }
 
   private getToken(): string | null {
     try {
-      return localStorage.getItem('authToken');
-    } catch (error) {
-      console.error('Error getting token:', error);
+      return localStorage.getItem("authToken");
+    } catch {
       return null;
     }
   }
 
-  private setToken(token: string): void {
-    try {
-      localStorage.setItem('authToken', token);
-    } catch (error) {
-      console.error('Error setting token:', error);
-    }
+  private setToken(token: string) {
+    localStorage.setItem("authToken", token);
   }
 
-  private removeToken(): void {
-    try {
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('userData');
-    } catch (error) {
-      console.error('Error removing token:', error);
-    }
+  private removeToken() {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userData");
   }
 
   private async request<T>(
-    endpoint: string, 
+    endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const url = `${this.baseURL}${path}`;
+    const url = `${this.baseURL}${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
     const token = this.getToken();
-    
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     };
 
     try {
-      console.log(`📡 Making API request to: ${url}`);
-      
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      });
-
+      const response = await fetch(url, { ...options, headers });
       if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = `HTTP ${response.status}`;
-        
+        const text = await response.text();
+        let message = `HTTP ${response.status}`;
         try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.detail || errorData.message || errorText;
-        } catch {
-          errorMessage = errorText || `HTTP error! status: ${response.status}`;
-        }
-        
-        throw new Error(errorMessage);
+          const data = JSON.parse(text);
+          message = data.detail || data.message || text;
+        } catch {}
+        throw new Error(message);
       }
-
-      // Handle empty responses
-      if (response.status === 204) {
-        return {} as T;
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error(`❌ API Request failed for ${url}:`, error);
-      
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new Error('Network error: Cannot connect to server. Please check your internet connection.');
-      }
-      
-      throw error;
+      return response.status === 204 ? ({} as T) : await response.json();
+    } catch (error: any) {
+      console.error(`API request failed for ${url}`, error);
+      throw new Error(error.message || "Unknown error occurred");
     }
   }
 
@@ -209,125 +175,143 @@ class ApiService {
   // AUTH METHODS
   // ===============================
   async register(userData: UserCreate): Promise<AuthResponse> {
-    const data = await this.request<AuthResponse>('/api/auth/register', {
-      method: 'POST',
+    const data = await this.request<AuthResponse>("/api/auth/register", {
+      method: "POST",
       body: JSON.stringify(userData),
     });
-    
-    if (data.access_token) {
-      this.setToken(data.access_token);
-      localStorage.setItem('userData', JSON.stringify(data.user));
-    }
-    
+    if (data.access_token) this.setToken(data.access_token);
+    localStorage.setItem("userData", JSON.stringify(data.user));
     return data;
   }
 
   async login(loginData: UserLogin): Promise<AuthResponse> {
-    const data = await this.request<AuthResponse>('/api/auth/login', {
-      method: 'POST',
+    const data = await this.request<AuthResponse>("/api/auth/login", {
+      method: "POST",
       body: JSON.stringify(loginData),
     });
-    
-    if (data.access_token) {
-      this.setToken(data.access_token);
-      localStorage.setItem('userData', JSON.stringify(data.user));
-    }
-    
+    if (data.access_token) this.setToken(data.access_token);
+    localStorage.setItem("userData", JSON.stringify(data.user));
     return data;
   }
 
-  logout(): void {
+  logout() {
     this.removeToken();
   }
 
   async getCurrentUser(): Promise<User> {
-    return this.request<User>('/api/auth/me');
+    return this.request<User>("/api/auth/me");
   }
 
   // ===============================
-  // WALLET METHODS
+  // WALLET
   // ===============================
   async getWalletBalance(): Promise<WalletData> {
-    return this.request<WalletData>('/api/wallet/balance');
+    return this.request<WalletData>("/api/wallet/balance");
   }
 
-  async depositFunds(depositData: DepositRequest): Promise<TransactionResponse> {
-    return this.request<TransactionResponse>('/api/wallet/deposit', {
-      method: 'POST',
-      body: JSON.stringify(depositData),
+  async depositFunds(data: DepositRequest): Promise<TransactionResponse> {
+    return this.request<TransactionResponse>("/api/wallet/deposit", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
   }
 
-  async withdrawFunds(withdrawData: WithdrawRequest): Promise<TransactionResponse> {
-    return this.request<TransactionResponse>('/api/wallet/withdraw', {
-      method: 'POST',
-      body: JSON.stringify(withdrawData),
+  async withdrawFunds(data: WithdrawRequest): Promise<TransactionResponse> {
+    return this.request<TransactionResponse>("/api/wallet/withdraw", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
   }
 
   // ===============================
-  // ASSET METHODS
+  // ASSETS
   // ===============================
   async getMarketAssets(): Promise<Asset[]> {
-    return this.request<Asset[]>('/api/assets/market');
+    return this.request<Asset[]>("/api/assets/market");
   }
 
   // ===============================
-  // INVESTMENT METHODS
+  // INVESTMENTS
   // ===============================
   async getMyInvestments(): Promise<UserInvestment[]> {
-    return this.request<UserInvestment[]>('/api/investments/my');
+    return this.request<UserInvestment[]>("/api/investments/my");
   }
 
-  async buyInvestment(investmentData: InvestmentRequest): Promise<{
+  async buyInvestment(data: InvestmentRequest): Promise<{
     success: boolean;
     message: string;
     investment: UserInvestment;
     new_balance: number;
   }> {
-    return this.request('/api/investments/buy', {
-      method: 'POST',
-      body: JSON.stringify(investmentData),
+    return this.request("/api/investments/buy", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createInvestment(data: Investment): Promise<Investment> {
+    return this.request("/api/investments/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getInvestments(): Promise<Investment[]> {
+    return this.request<Investment[]>("/api/investments/");
+  }
+
+  async getInvestment(id: number): Promise<Investment> {
+    return this.request<Investment>(`/api/investments/${id}`);
+  }
+
+  async updateInvestment(id: number, data: Partial<Investment>): Promise<Investment> {
+    return this.request<Investment>(`/api/investments/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteInvestment(id: number): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/api/investments/${id}`, {
+      method: "DELETE",
     });
   }
 
   // ===============================
-  // ACTIVITY METHODS
+  // ACTIVITIES
   // ===============================
   async getMyActivities(): Promise<UserActivity[]> {
-    return this.request<UserActivity[]>('/api/activities/my');
+    return this.request<UserActivity[]>("/api/activities/my");
   }
 
   // ===============================
-  // PnL METHODS
+  // PnL
   // ===============================
   async getCurrentPnL(): Promise<PnLData> {
-    return this.request<PnLData>('/api/pnl/current');
+    return this.request<PnLData>("/api/pnl/current");
   }
 
   // ===============================
-  // UTILITY METHODS
+  // HEALTH CHECKS
   // ===============================
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
-    return this.request('/api/health');
+    return this.request("/api/health");
   }
 
   async serverHealth(): Promise<{ status: string; timestamp: string }> {
-    return this.request('/health');
+    return this.request("/health");
   }
 
+  // ===============================
+  // UTILS
+  // ===============================
   isAuthenticated(): boolean {
     return !!this.getToken();
   }
 
   getStoredUser(): User | null {
-    try {
-      const userData = localStorage.getItem('userData');
-      return userData ? JSON.parse(userData) : null;
-    } catch (error) {
-      console.error('Error getting stored user:', error);
-      return null;
-    }
+    const userData = localStorage.getItem("userData");
+    return userData ? JSON.parse(userData) : null;
   }
 
   getCurrentUserPhone(): string | null {
@@ -337,84 +321,20 @@ class ApiService {
 }
 
 // ===============================
-// LEGACY INVESTMENT FUNCTIONS (axios-based)
-// ===============================
-const LEGACY_API_URL = "https://pesaprime-end-v3.onrender.com";
-
-export const createInvestment = async (data: Investment) => {
-  try {
-    const res = await axios.post(`${LEGACY_API_URL}/investments/`, data);
-    return res.data;
-  } catch (error) {
-    console.error('Error creating investment:', error);
-    throw error;
-  }
-};
-
-export const getInvestments = async (): Promise<Investment[]> => {
-  try {
-    const res = await axios.get(`${LEGACY_API_URL}/investments/`);
-    return res.data;
-  } catch (error) {
-    console.error('Error getting investments:', error);
-    throw error;
-  }
-};
-
-export const getInvestment = async (id: number): Promise<Investment> => {
-  try {
-    const res = await axios.get(`${LEGACY_API_URL}/investments/${id}`);
-    return res.data;
-  } catch (error) {
-    console.error('Error getting investment:', error);
-    throw error;
-  }
-};
-
-export const updateInvestment = async (id: number, data: Partial<Investment>): Promise<Investment> => {
-  try {
-    const res = await axios.put(`${LEGACY_API_URL}/investments/${id}`, data);
-    return res.data;
-  } catch (error) {
-    console.error('Error updating investment:', error);
-    throw error;
-  }
-};
-
-export const deleteInvestment = async (id: number): Promise<{ message: string }> => {
-  try {
-    const res = await axios.delete(`${LEGACY_API_URL}/investments/${id}`);
-    return res.data;
-  } catch (error) {
-    console.error('Error deleting investment:', error);
-    throw error;
-  }
-};
-
-// ===============================
 // ERROR HANDLER
 // ===============================
 export class ApiErrorHandler {
-  static handle(error: any, context: string = ''): string {
-    console.error(`API Error in ${context}:`, error);
-    
+  static handle(error: any, context: string = ""): string {
+    console.error(`API Error (${context}):`, error);
     if (error instanceof Error) {
-      if (error.message.includes('Network') || error.message.includes('Failed to fetch')) {
-        return 'Unable to connect to server. Please check your internet connection.';
-      }
-      if (error.message.includes('401') || error.message.includes('Authentication')) {
-        return 'Your session has expired. Please login again.';
-      }
-      if (error.message.includes('404')) {
-        return 'Requested resource not found.';
-      }
-      if (error.message.includes('500')) {
-        return 'Server error. Please try again later.';
-      }
+      if (error.message.includes("Network") || error.message.includes("Failed to fetch"))
+        return "Cannot connect to server. Check your internet.";
+      if (error.message.includes("401")) return "Session expired. Please login again.";
+      if (error.message.includes("404")) return "Resource not found.";
+      if (error.message.includes("500")) return "Server error. Try again later.";
       return error.message;
     }
-    
-    return 'An unexpected error occurred. Please try again.';
+    return "An unexpected error occurred.";
   }
 }
 
