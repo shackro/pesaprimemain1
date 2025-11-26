@@ -1,5 +1,6 @@
 // src/services/api.ts
 import axios from "axios";
+import apiService from "src/services/api.ts";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -115,6 +116,19 @@ export interface Investment {
   amount: number;
   category?: string;
 }
+
+
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      const investments = await apiService.getInvestments();
+      setInvestments(investments);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  fetchData();
+}, []);
 
 // ===============================
 // API SERVICE CLASS
