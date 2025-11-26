@@ -1,10 +1,9 @@
-import axios from "axios";
-
+// frontend/src/services/api.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import axios from "axios";
 
 // ===============================
 // TYPES
-// ===============================
 export interface User {
   id: string;
   name: string;
@@ -26,8 +25,7 @@ export interface UserCreate {
 }
 
 export interface AuthResponse {
-  access_token: string;
-  token_type: string;
+  success: boolean;
   user: User;
 }
 
@@ -71,18 +69,19 @@ export interface Asset {
 
 export interface UserInvestment {
   id: number;
-  user_phone: string;
-  asset_id: string;
-  asset_name: string;
-  invested_amount: number;
-  current_value: number;
-  units: number;
-  entry_price: number;
-  current_price: number;
-  profit_loss: number;
-  profit_loss_percentage: number;
-  status: string;
-  created_at: string;
+  user_phone?: string;
+  user_id?: string;
+  asset_id?: string;
+  asset_name?: string;
+  invested_amount?: number;
+  current_value?: number;
+  units?: number;
+  entry_price?: number;
+  current_price?: number;
+  profit_loss?: number;
+  profit_loss_percentage?: number;
+  status?: string;
+  created_at?: string;
 }
 
 export interface UserActivity {
@@ -116,97 +115,60 @@ export interface Investment {
 }
 
 // ===============================
-// API SERVICE CLASS
-// ===============================
+// ApiService class (no tokens)
 class ApiService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL =
-      import.meta.env.VITE_API_BASE_URL || "https://pesaprime-end-v3.onrender.com";
+    this.baseURL = import.meta.env.VITE_API_BASE_URL || "https://pesaprime-end-v3.onrender.com";
     console.log("🚀 API Service initialized with URL:", this.baseURL);
   }
 
-  private getToken(): string | null {
-    try {
-      return localStorage.getItem("authToken");
-    } catch {
-      return null;
-    }
-  }
-
-  private setToken(token: string) {
-    localStorage.setItem("authToken", token);
-  }
-
-  private removeToken() {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("userData");
+  // no token logic (Option C)
+  private getUrl(path: string) {
+    return `${this.baseURL}${path.startsWith("/") ? path : "/" + path}`;
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${this.baseURL}${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
-    const token = this.getToken();
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    };
-
+    const url = this.getUrl(endpoint);
     try {
-      const response = await fetch(url, { ...options, headers });
-      if (!response.ok) {
-        const text = await response.text();
-        let message = `HTTP ${response.status}`;
+      const res = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
+      if (!res.ok) {
+        const txt = await res.text();
+        let msg = `HTTP ${res.status}`;
         try {
-          const data = JSON.parse(text);
-          message = data.detail || data.message || text;
+          const j = JSON.parse(txt);
+          msg = j.detail || j.message || txt;
         } catch {}
-        throw new Error(message);
+        throw new Error(msg);
       }
-      return response.status === 204 ? ({} as T) : await response.json();
-    } catch (error: any) {
-      console.error(`API request failed for ${url}`, error);
-      throw new Error(error.message || "Unknown error occurred");
+      if (res.status === 204) return {} as T;
+      return (await res.json()) as T;
+    } catch (err: any) {
+      console.error("API request failed:", endpoint, err);
+      throw err;
     }
   }
 
-  // ===============================
-  // AUTH METHODS
-  // ===============================
+  // AUTH (no JWT)
   async register(userData: UserCreate): Promise<AuthResponse> {
-    const data = await this.request<AuthResponse>("/api/auth/register", {
+    return this.request<AuthResponse>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify(userData),
     });
-    if (data.access_token) this.setToken(data.access_token);
-    localStorage.setItem("userData", JSON.stringify(data.user));
-    return data;
   }
 
   async login(loginData: UserLogin): Promise<AuthResponse> {
-    const data = await this.request<AuthResponse>("/api/auth/login", {
+    return this.request<AuthResponse>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify(loginData),
     });
-    if (data.access_token) this.setToken(data.access_token);
-    localStorage.setItem("userData", JSON.stringify(data.user));
-    return data;
   }
 
-  logout() {
-    this.removeToken();
-  }
-
-  async getCurrentUser(): Promise<User> {
-    return this.request<User>("/api/auth/me");
-  }
-
-  // ===============================
-  // WALLET METHODS
-  // ===============================
-  async getWalletBalance(): Promise<WalletData> {
-    return this.request<WalletData>("/api/wallet/balance");
+  // WALLET
+  async getWalletBalance(phone_number: string): Promise<WalletData> {
+    // pass phone as query param
+    return this.request<WalletData>(`/api/wallet/balance?phone_number=${encodeURIComponent(phone_number)}`);
   }
 
   async depositFunds(data: DepositRequest): Promise<TransactionResponse> {
@@ -223,25 +185,33 @@ class ApiService {
     });
   }
 
-  // ===============================
-  // ASSETS METHODS
-  // ===============================
+  // ASSETS
   async getMarketAssets(): Promise<Asset[]> {
     return this.request<Asset[]>("/api/assets/market");
   }
 
-  // ===============================
-  // INVESTMENTS METHODS
-  // ===============================
-  async getMyInvestments(): Promise<UserInvestment[]> {
-    return this.request<UserInvestment[]>("/api/investments/my");
+  // INVESTMENTS
+  async getMyInvestments(phone_number: string): Promise<UserInvestment[]> {
+    return this.request<UserInvestment[]>(`/api/investments/my?phone_number=${encodeURIComponent(phone_number)}`);
   }
 
-  async createInvestment(data: Investment): Promise<Investment> {
-    return this.request("/api/investments/", {
+  async buyInvestment(data: InvestmentRequest): Promise<any> {
+    return this.request("/api/investments/buy", {
       method: "POST",
       body: JSON.stringify(data),
     });
+  }
+
+  // Legacy CRUD endpoints compatible with your UI
+  async createInvestment(data: Investment): Promise<Investment> {
+    return this.request<Investment>("/api/investments/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getInvestments(): Promise<Investment[]> {
+    return this.request<Investment[]>("/api/investments/");
   }
 
   async getInvestment(id: number): Promise<Investment> {
@@ -261,76 +231,37 @@ class ApiService {
     });
   }
 
-  // ===============================
-  // ACTIVITIES METHODS
-  // ===============================
-  async getMyActivities(): Promise<UserActivity[]> {
-    return this.request<UserActivity[]>("/api/activities/my");
+  // ACTIVITIES
+  async getMyActivities(phone_number: string): Promise<UserActivity[]> {
+    return this.request<UserActivity[]>(`/api/activities/my?phone_number=${encodeURIComponent(phone_number)}`);
   }
 
-  // ===============================
-  // PnL METHODS
-  // ===============================
-  async getCurrentPnL(): Promise<PnLData> {
-    return this.request<PnLData>("/api/pnl/current");
+  // PnL
+  async getCurrentPnL(phone_number: string): Promise<PnLData> {
+    return this.request<PnLData>(`/api/pnl/current?phone_number=${encodeURIComponent(phone_number)}`);
   }
 
-  // ===============================
-  // HEALTH CHECKS
-  // ===============================
-  async healthCheck(): Promise<{ status: string; timestamp: string }> {
+  // health
+  async healthCheck(): Promise<any> {
     return this.request("/api/health");
-  }
-
-  async serverHealth(): Promise<{ status: string; timestamp: string }> {
-    return this.request("/health");
-  }
-
-  // ===============================
-  // UTILITY METHODS
-  // ===============================
-  isAuthenticated(): boolean {
-    return !!this.getToken();
-  }
-
-  getStoredUser(): User | null {
-    const userData = localStorage.getItem("userData");
-    return userData ? JSON.parse(userData) : null;
-  }
-
-  getCurrentUserPhone(): string | null {
-    const user = this.getStoredUser();
-    return user ? user.phone_number : null;
   }
 }
 
-// ===============================
-// SINGLETON INSTANCE
-// ===============================
 export const apiService = new ApiService();
 export default apiService;
 
-// ===============================
-// NAMED WRAPPERS FOR PAGES
-// ===============================
-export const getInvestments = () => apiService.getMyInvestments();
+// Named exports for compatibility with existing imports
+export const getInvestments = () => apiService.getInvestments();
 export const createInvestment = (data: Investment) => apiService.createInvestment(data);
 export const deleteInvestment = (id: number) => apiService.deleteInvestment(id);
 
-// ===============================
-// ERROR HANDLER
-// ===============================
-export class ApiErrorHandler {
-  static handle(error: any, context: string = ""): string {
-    console.error(`API Error (${context}):`, error);
-    if (error instanceof Error) {
-      if (error.message.includes("Network") || error.message.includes("Failed to fetch"))
-        return "Cannot connect to server. Check your internet.";
-      if (error.message.includes("401")) return "Session expired. Please login again.";
-      if (error.message.includes("404")) return "Resource not found.";
-      if (error.message.includes("500")) return "Server error. Try again later.";
-      return error.message;
-    }
-    return "An unexpected error occurred.";
-  }
-}
+export const getAssets = () => apiService.getMarketAssets();
+export const getPnL = (phone_number: string) => apiService.getCurrentPnL(phone_number);
+export const getWalletBalance = (phone_number: string) => apiService.getWalletBalance(phone_number);
+export const depositFunds = (data: DepositRequest) => apiService.depositFunds(data);
+export const withdrawFunds = (data: WithdrawRequest) => apiService.withdrawFunds(data);
+
+export const login = (data: UserLogin) => apiService.login(data);
+export const register = (data: UserCreate) => apiService.register(data);
+export const getMyInvestments = (phone_number: string) => apiService.getMyInvestments(phone_number);
+export const getMyActivities = (phone_number: string) => apiService.getMyActivities(phone_number);
