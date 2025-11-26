@@ -2,6 +2,10 @@
 import axios from "axios";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+// ===============================
+// TYPES
+// ===============================
 export interface User {
   id: string;
   name: string;
@@ -141,10 +145,7 @@ class ApiService {
     localStorage.removeItem("userData");
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseURL}${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
     const token = this.getToken();
     const headers: HeadersInit = {
@@ -203,7 +204,7 @@ class ApiService {
   }
 
   // ===============================
-  // WALLET
+  // WALLET METHODS
   // ===============================
   async getWalletBalance(): Promise<WalletData> {
     return this.request<WalletData>("/api/wallet/balance");
@@ -224,14 +225,14 @@ class ApiService {
   }
 
   // ===============================
-  // ASSETS
+  // ASSETS METHODS
   // ===============================
   async getMarketAssets(): Promise<Asset[]> {
     return this.request<Asset[]>("/api/assets/market");
   }
 
   // ===============================
-  // INVESTMENTS
+  // INVESTMENTS METHODS
   // ===============================
   async getMyInvestments(): Promise<UserInvestment[]> {
     return this.request<UserInvestment[]>("/api/investments/my");
@@ -285,7 +286,7 @@ class ApiService {
   }
 
   // ===============================
-  // PnL
+  // PnL METHODS
   // ===============================
   async getCurrentPnL(): Promise<PnLData> {
     return this.request<PnLData>("/api/pnl/current");
@@ -303,7 +304,7 @@ class ApiService {
   }
 
   // ===============================
-  // UTILS
+  // UTILITY METHODS
   // ===============================
   isAuthenticated(): boolean {
     return !!this.getToken();
@@ -319,6 +320,64 @@ class ApiService {
     return user ? user.phone_number : null;
   }
 }
+
+// ===============================
+// LEGACY AXIOS FUNCTIONS
+// ===============================
+const LEGACY_API_URL = "https://pesaprime-end-v3.onrender.com";
+
+export const createInvestmentLegacy = async (data: Investment) => {
+  try {
+    const res = await axios.post(`${LEGACY_API_URL}/investments/`, data);
+    return res.data;
+  } catch (error) {
+    console.error("Error creating investment:", error);
+    throw error;
+  }
+};
+
+export const getInvestmentsLegacy = async (): Promise<Investment[]> => {
+  try {
+    const res = await axios.get(`${LEGACY_API_URL}/investments/`);
+    return res.data;
+  } catch (error) {
+    console.error("Error getting investments:", error);
+    throw error;
+  }
+};
+
+export const getInvestmentLegacy = async (id: number): Promise<Investment> => {
+  try {
+    const res = await axios.get(`${LEGACY_API_URL}/investments/${id}`);
+    return res.data;
+  } catch (error) {
+    console.error("Error getting investment:", error);
+    throw error;
+  }
+};
+
+export const updateInvestmentLegacy = async (
+  id: number,
+  data: Partial<Investment>
+): Promise<Investment> => {
+  try {
+    const res = await axios.put(`${LEGACY_API_URL}/investments/${id}`, data);
+    return res.data;
+  } catch (error) {
+    console.error("Error updating investment:", error);
+    throw error;
+  }
+};
+
+export const deleteInvestmentLegacy = async (id: number): Promise<{ message: string }> => {
+  try {
+    const res = await axios.delete(`${LEGACY_API_URL}/investments/${id}`);
+    return res.data;
+  } catch (error) {
+    console.error("Error deleting investment:", error);
+    throw error;
+  }
+};
 
 // ===============================
 // ERROR HANDLER
